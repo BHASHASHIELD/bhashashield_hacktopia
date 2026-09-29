@@ -1,4 +1,4 @@
-# BhashaShield 2.0
+# BhashaShield
 
 Context-aware voice-fraud protection for multilingual, social-engineering-heavy calls.
 
@@ -42,7 +42,7 @@ Open the project preview. The dashboard is served at the root route and the API 
 - Voice authenticity, multilingual STT, LLM intent analysis, and offline analysis are represented by deterministic demo signals. They are intentionally not presented as validated model results.
 - Demo state is in memory and resets when the API restarts.
 
-**NOT IMPLEMENTED**
+**Future Implementation**
 
 - live telephony integration
 - WAV/MP3/M4A ingestion
