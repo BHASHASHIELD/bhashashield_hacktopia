@@ -1,0 +1,1 @@
+- [Generated API client typing](generated-api-client-typing.md) — generated fetch helpers require `dom.iterable` in the shared client TypeScript lib.

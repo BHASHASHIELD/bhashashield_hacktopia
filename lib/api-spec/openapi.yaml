@@ -1,0 +1,343 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: BhashaShield 2.0 contextual voice-fraud protection API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: analysis
+    description: Call analysis and feedback
+  - name: context
+    description: Trusted contacts and verification directory
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [analysis]
+      summary: Get the dashboard overview
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /demo-scenarios:
+    get:
+      operationId: listDemoScenarios
+      tags: [analysis]
+      summary: List synthetic demo call scenarios
+      responses:
+        "200":
+          description: Demo scenarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DemoScenario"
+  /analyze:
+    post:
+      operationId: analyzeCall
+      tags: [analysis]
+      summary: Analyze a demo call or transcript
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisInput"
+      responses:
+        "200":
+          description: Structured risk analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+  /feedback:
+    post:
+      operationId: submitFeedback
+      tags: [analysis]
+      summary: Record explicit user feedback about an analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "200":
+          description: Feedback acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feedback"
+  /trusted-people:
+    get:
+      operationId: listTrustedPeople
+      tags: [context]
+      summary: List trusted contacts
+      responses:
+        "200":
+          description: Trusted contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrustedPerson"
+    post:
+      operationId: createTrustedPerson
+      tags: [context]
+      summary: Add a trusted contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrustedPersonInput"
+      responses:
+        "201":
+          description: Trusted contact created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedPerson"
+  /directory:
+    get:
+      operationId: listDirectoryEntries
+      tags: [context]
+      summary: List verified directory entries
+      responses:
+        "200":
+          description: Directory entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DirectoryEntry"
+  /directory/verify:
+    post:
+      operationId: verifyDirectoryNumber
+      tags: [context]
+      summary: Verify a claimed institutional number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationInput"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResult"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    DemoScenario:
+      type: object
+      required: [id, label, description, expectedLevel, caller, transcript, voiceClass]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        expectedLevel: { type: string }
+        caller: { type: string }
+        transcript: { type: string }
+        voiceClass: { type: string }
+        accent: { type: string }
+    AnalysisInput:
+      type: object
+      required: [scenarioId, userId]
+      properties:
+        scenarioId: { type: string }
+        userId: { type: string }
+        callerNumber: { type: string }
+        channel: { type: string }
+        transcript: { type: string }
+        voiceClass: { type: string }
+        offline: { type: boolean }
+    Analysis:
+      type: object
+      required:
+        - id
+        - score
+        - level
+        - confidence
+        - caller
+        - language
+        - voice
+        - intent
+        - context
+        - behaviour
+        - evidence
+        - explanation
+        - recommendedAction
+        - analysisMode
+        - analyzedAt
+      properties:
+        id: { type: string }
+        score: { type: integer }
+        level: { type: string }
+        confidence: { type: number }
+        caller: { type: string }
+        callerNumber: { type: string }
+        channel: { type: string }
+        language: { type: string }
+        voice:
+          $ref: "#/components/schemas/VoiceAnalysis"
+        intent:
+          $ref: "#/components/schemas/IntentAnalysis"
+        context:
+          $ref: "#/components/schemas/ContextAnalysis"
+        behaviour:
+          $ref: "#/components/schemas/BehaviourAnalysis"
+        evidence:
+          type: array
+          items: { type: string }
+        explanation: { type: string }
+        recommendedAction: { type: string }
+        analysisMode: { type: string }
+        transcript: { type: string }
+        analyzedAt: { type: string }
+    VoiceAnalysis:
+      type: object
+      required: [classification, probability, confidence, label]
+      properties:
+        classification: { type: string }
+        probability: { type: number }
+        confidence: { type: number }
+        label: { type: string }
+    IntentAnalysis:
+      type: object
+      required: [type, urgency, requestedAction, socialEngineering]
+      properties:
+        type: { type: string }
+        urgency: { type: string }
+        requestedAction: { type: string }
+        socialEngineering: { type: boolean }
+    ContextAnalysis:
+      type: object
+      required: [schemeMatch, bankingMatch, contextualMatch, matchedContext, channelVerified]
+      properties:
+        schemeMatch: { type: boolean }
+        bankingMatch: { type: boolean }
+        contextualMatch: { type: boolean }
+        matchedContext: { type: string }
+        channelVerified: { type: boolean }
+    BehaviourAnalysis:
+      type: object
+      required: [anomalyScore, signals]
+      properties:
+        anomalyScore: { type: number }
+        signals:
+          type: array
+          items: { type: string }
+    Dashboard:
+      type: object
+      required: [totalAnalyses, highRiskCount, protectedContextCount, averageScore, recentAnalyses, systemStatus]
+      properties:
+        totalAnalyses: { type: integer }
+        highRiskCount: { type: integer }
+        protectedContextCount: { type: integer }
+        averageScore: { type: integer }
+        recentAnalyses:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisSummary" }
+        systemStatus: { type: string }
+    AnalysisSummary:
+      type: object
+      required: [id, caller, score, level, time, action]
+      properties:
+        id: { type: string }
+        caller: { type: string }
+        score: { type: integer }
+        level: { type: string }
+        time: { type: string }
+        action: { type: string }
+    TrustedPerson:
+      type: object
+      required: [id, name, relationship, phone, verified, channel]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        relationship: { type: string }
+        phone: { type: string }
+        verified: { type: boolean }
+        channel: { type: string }
+    TrustedPersonInput:
+      type: object
+      required: [name, relationship, phone, channel]
+      properties:
+        name: { type: string }
+        relationship: { type: string }
+        phone: { type: string }
+        channel: { type: string }
+    DirectoryEntry:
+      type: object
+      required: [id, institution, number, category, purpose, source, priority, lastVerified]
+      properties:
+        id: { type: string }
+        institution: { type: string }
+        number: { type: string }
+        category: { type: string }
+        purpose: { type: string }
+        source: { type: string }
+        priority: { type: string }
+        lastVerified: { type: string }
+    VerificationInput:
+      type: object
+      required: [institution]
+      properties:
+        institution: { type: string }
+        number: { type: string }
+    VerificationResult:
+      type: object
+      required: [verified, message]
+      properties:
+        verified: { type: boolean }
+        institution: { type: string }
+        officialNumber: { type: string }
+        message: { type: string }
+    FeedbackInput:
+      type: object
+      required: [analysisId, outcome]
+      properties:
+        analysisId: { type: string }
+        outcome: { type: string }
+        note: { type: string }
+    Feedback:
+      type: object
+      required: [saved, message]
+      properties:
+        saved: { type: boolean }
+        message: { type: string }
+

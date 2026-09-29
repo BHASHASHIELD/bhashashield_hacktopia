@@ -1,0 +1,77 @@
+import { useMemo, useState } from 'react';
+import { CheckCircle2, ChevronDown, FileText, Flag, Mic2, RefreshCw, ShieldAlert, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Volume2 } from 'lucide-react';
+import { useGetDashboard, useListDemoScenarios, useAnalyzeCall, useSubmitFeedback, type Analysis, type DemoScenario } from '@workspace/api-client-react';
+import { PageHeading, MetricCard, RiskBadge, Skeleton, ErrorState, EmptyState, ProtectedNote, LoadingButton } from '@/components/ui-pieces';
+
+const riskTone = (level: string) => {
+  const l = level.toLowerCase();
+  if (l.includes('high') || l.includes('critical')) return { bg: 'bg-[#f8e2dd]', text: 'text-[#a54635]', border: 'border-[#edc7bd]' };
+  if (l.includes('low') || l.includes('safe')) return { bg: 'bg-[#dceee8]', text: 'text-[#237464]', border: 'border-[#bfdfd5]' };
+  return { bg: 'bg-[#f5ead0]', text: 'text-[#896b24]', border: 'border-[#e8d8ad]' };
+};
+
+function ScoreDial({ score, level }: { score: number; level: string }) {
+  const tone = riskTone(level);
+  return <div className={`relative grid size-[146px] shrink-0 place-items-center rounded-full border-[11px] ${tone.border} ${tone.bg} md:size-[164px]`}>
+    <div className="text-center"><p className={`text-[40px] font-extrabold leading-none tracking-[-.07em] ${tone.text}`}>{score}</p><p className={`mt-1 font-mono text-[9px] uppercase tracking-[.16em] ${tone.text}`}>risk score</p></div>
+    <span className={`absolute -bottom-2 rounded-full border-4 border-card px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[.08em] ${tone.bg} ${tone.text}`}>{level}</span>
+  </div>;
+}
+
+function EvidenceRow({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'positive' | 'negative' | 'neutral' }) {
+  return <div className="flex items-start justify-between gap-4 border-b border-border/70 py-3 last:border-0"><span className="text-[11px] text-muted-foreground">{label}</span><span className={`max-w-[65%] text-right text-[12px] font-semibold ${tone === 'negative' ? 'text-[#a54635]' : tone === 'positive' ? 'text-primary' : 'text-foreground'}`}>{value}</span></div>;
+}
+
+function AnalysisReview({ analysis, onFeedback }: { analysis: Analysis; onFeedback: (outcome: string) => void }) {
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const tone = riskTone(analysis.level);
+  const isHigh = analysis.level.toLowerCase().includes('high') || analysis.level.toLowerCase().includes('critical');
+  const send = (outcome: string) => { onFeedback(outcome); setFeedbackSent(true); };
+  return <section className="animate-rise rounded-2xl border border-card-border bg-card shadow-[var(--shadow-md)]" data-testid="section-analysis-result">
+    <div className={`flex flex-col gap-5 border-b border-border/70 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-7 ${isHigh ? 'bg-[#fbf2ef]/70' : 'bg-primary/[.035]'}`}>
+      <div className="flex items-center gap-5"><ScoreDial score={analysis.score} level={analysis.level} /><div><div className="flex flex-wrap items-center gap-2"><p className="text-[18px] font-extrabold tracking-[-.035em]">Decision ready</p><span className="rounded-full bg-secondary px-2 py-1 font-mono text-[9px] uppercase tracking-[.1em] text-muted-foreground">{analysis.analysisMode}</span></div><p className="mt-2 max-w-lg text-[12px] leading-relaxed text-muted-foreground">{analysis.explanation}</p></div></div>
+      <div className="rounded-xl border border-border/60 bg-card/75 px-4 py-3 md:min-w-[170px]"><p className="font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground">Recommended next step</p><p className={`mt-2 text-[13px] font-extrabold ${tone.text}`}>{analysis.recommendedAction}</p></div>
+    </div>
+    <div className="grid gap-7 px-5 py-6 md:grid-cols-[1.1fr_.9fr] md:px-7">
+      <div><div className="mb-3 flex items-center justify-between"><h3 className="text-[13px] font-extrabold">Why this decision</h3><span className="font-mono text-[10px] text-muted-foreground">{Math.round(analysis.confidence * 100)}% confidence</span></div><div className="rounded-xl border border-border/70 px-4"><EvidenceRow label="Caller intent" value={`${analysis.intent.type} · ${analysis.intent.requestedAction}`} tone={analysis.intent.socialEngineering ? 'negative' : 'neutral'} /><EvidenceRow label="Voice signal" value={`${analysis.voice.label} · ${Math.round(analysis.voice.probability * 100)}% match`} tone={isHigh ? 'negative' : 'neutral'} /><EvidenceRow label="Context check" value={analysis.context.matchedContext || (analysis.context.contextualMatch ? 'Matches your protected context' : 'No protected context match')} tone={analysis.context.contextualMatch ? 'negative' : 'positive'} /><EvidenceRow label="Behaviour pattern" value={`${analysis.behaviour.signals?.length ?? 0} notable signals · ${Math.round(analysis.behaviour.anomalyScore * 100)}% anomaly`} tone={analysis.behaviour.anomalyScore > .55 ? 'negative' : 'positive'} /></div></div>
+      <div><h3 className="mb-3 text-[13px] font-extrabold">Evidence signals</h3><div className="space-y-2">{analysis.evidence.map((item, index) => <div key={`${item}-${index}`} className="flex gap-2.5 rounded-xl bg-muted/60 p-3 text-[11px] leading-relaxed text-foreground/80"><span className={`mt-1 size-1.5 shrink-0 rounded-full ${isHigh ? 'bg-destructive' : 'bg-primary'}`} />{item}</div>)}</div></div>
+    </div>
+    {analysis.transcript && <details className="border-t border-border/70 px-5 py-4 md:px-7"><summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] font-bold"><FileText size={15} className="text-primary" /> View transcript <ChevronDown size={14} className="ml-auto text-muted-foreground" /></summary><p className="mt-4 max-w-3xl whitespace-pre-line rounded-xl bg-muted/60 p-4 text-[12px] leading-7 text-muted-foreground">{analysis.transcript}</p></details>}
+    <div className="flex flex-col gap-3 border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-7"><div><p className="text-[11px] font-bold">Was this decision useful?</p><p className="mt-0.5 text-[10px] text-muted-foreground">Your feedback improves future protection.</p></div>{feedbackSent ? <div className="flex items-center gap-2 text-[11px] font-bold text-primary"><CheckCircle2 size={15} /> Feedback recorded</div> : <div className="flex gap-2"><button onClick={() => send('helpful')} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11px] font-bold hover:bg-muted" data-testid="button-feedback-helpful"><ThumbsUp size={13} /> Helpful</button><button onClick={() => send('not-helpful')} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11px] font-bold hover:bg-muted" data-testid="button-feedback-not-helpful"><ThumbsDown size={13} /> Not quite</button></div>}</div>
+  </section>;
+}
+
+export default function Workspace() {
+  const dashboardQuery = useGetDashboard();
+  const scenariosQuery = useListDemoScenarios();
+  const analyzeCall = useAnalyzeCall();
+  const submitFeedback = useSubmitFeedback();
+  const [selectedId, setSelectedId] = useState('');
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [channel, setChannel] = useState('phone');
+  const scenarios = scenariosQuery.data ?? [];
+  const selected = useMemo<DemoScenario | undefined>(() => scenarios.find(item => item.id === selectedId) ?? scenarios[0], [scenarios, selectedId]);
+  const dashboard = dashboardQuery.data;
+
+  const runAnalysis = () => {
+    if (!selected) return;
+    analyzeCall.mutate({ data: { scenarioId: selected.id, userId: 'demo-user', callerNumber: '+91 80 4567 2310', channel, transcript: selected.transcript, voiceClass: selected.voiceClass, offline: true } }, { onSuccess: result => setAnalysis(result) });
+  };
+  const handleFeedback = (outcome: string) => { if (analysis) submitFeedback.mutate({ data: { analysisId: analysis.id, outcome } }); };
+
+  return <div>
+    <PageHeading eyebrow="Live workspace / 01" title="Decide before you trust." description="Turn a voice interaction into a clear, evidence-backed next step. No panic. No guesswork." action={<div className="hidden items-center gap-2 text-right sm:flex"><div className="size-2 rounded-full bg-primary" /><div><p className="font-mono text-[10px] uppercase tracking-[.14em] text-primary">Protection on</p><p className="mt-1 text-[10px] text-muted-foreground">Local analysis available</p></div></div>} />
+    {dashboardQuery.isLoading ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[110px]" />)}</div> : dashboardQuery.isError ? <ErrorState message="Dashboard metrics are temporarily unavailable." /> : <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><MetricCard label="Calls reviewed" value={dashboard?.totalAnalyses ?? 0} note="Across this workspace" /><MetricCard label="High risk found" value={dashboard?.highRiskCount ?? 0} note="Decisions needing action" accent="orange" /><MetricCard label="Protected context" value={dashboard?.protectedContextCount ?? 0} note="Context checks matched" accent="navy" /><MetricCard label="Average risk" value={`${dashboard?.averageScore ?? 0}`} note="Out of 100 · recent calls" /></div>}
+
+    <div className="mt-8 grid gap-6 xl:grid-cols-[.86fr_1.14fr]">
+      <section className="animate-rise delay-1 rounded-2xl border border-card-border bg-card p-5 shadow-[var(--shadow-sm)] md:p-6"><div className="mb-5 flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.16em] text-primary">Try a call</p><h2 className="mt-1 text-[18px] font-extrabold tracking-[-.035em]">Choose a scenario</h2></div><div className="rounded-lg bg-primary/10 p-2 text-primary"><Mic2 size={18} /></div></div>
+        {scenariosQuery.isLoading ? <div className="space-y-3"><Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" /></div> : scenariosQuery.isError ? <ErrorState message="Demo scenarios are unavailable." /> : scenarios.length === 0 ? <EmptyState title="No scenarios available" body="Demo scenarios will appear here when the analysis service is ready." icon={Sparkles} /> : <div className="space-y-2">{scenarios.map(item => <button key={item.id} onClick={() => { setSelectedId(item.id); setAnalysis(null); }} data-testid={`button-scenario-${item.id}`} className={`w-full rounded-xl border p-3.5 text-left transition-all hover:-translate-y-0.5 ${selected?.id === item.id ? 'border-primary bg-primary/[.06] shadow-sm' : 'border-border/70 bg-background/30 hover:border-primary/40'}`}><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><span className={`size-1.5 rounded-full ${riskTone(item.expectedLevel).text.replace('text-', 'bg-')}`} /><p className="text-[12px] font-bold">{item.label}</p></div><p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{item.description}</p></div><RiskBadge level={item.expectedLevel} /></div><div className="mt-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.1em] text-muted-foreground"><span>{item.caller}</span><span className="text-border">/</span><span>{item.accent || 'Multilingual'}</span></div></button>)}</div>}
+        <div className="mt-5 grid gap-3 border-t border-border/70 pt-5 sm:grid-cols-[1fr_auto]"><label className="block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[.12em] text-muted-foreground">Interaction channel</span><select value={channel} onChange={e => setChannel(e.target.value)} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-[12px] font-semibold outline-none focus:ring-2 focus:ring-ring/30" data-testid="select-channel"><option value="phone">Phone call</option><option value="whatsapp">WhatsApp voice</option><option value="video">Video call</option></select></label><LoadingButton loading={analyzeCall.isPending} onClick={runAnalysis} disabled={!selected} className="mt-auto h-10 whitespace-nowrap"><ShieldCheck size={15} /> Analyze call</LoadingButton></div>
+        <ProtectedNote>Demo calls are synthetic. In a real call, BhashaShield keeps your transcript private and can continue when connectivity drops.</ProtectedNote>
+      </section>
+      <div className="animate-rise delay-2">{analysis ? <AnalysisReview analysis={analysis} onFeedback={handleFeedback} /> : <div className="flex min-h-[430px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 px-8 text-center"><div className="relative mb-5 grid size-20 place-items-center rounded-[28px] bg-primary/10 text-primary"><ShieldAlert size={32} strokeWidth={1.5} /><span className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-accent text-accent-foreground"><Sparkles size={12} /></span></div><h2 className="text-[18px] font-extrabold tracking-[-.035em]">Your decision will appear here</h2><p className="mt-2 max-w-sm text-[12px] leading-relaxed text-muted-foreground">Select a call scenario on the left. We will map the voice, intent, context, and behaviour signals into one calm recommendation.</p><div className="mt-5 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.13em] text-muted-foreground"><Volume2 size={13} /> Evidence before urgency</div></div>}</div>
+    </div>
+    {dashboard?.recentAnalyses && dashboard.recentAnalyses.length > 0 && <section className="mt-8 rounded-2xl border border-card-border bg-card p-5 shadow-[var(--shadow-sm)] md:p-6"><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.16em] text-primary">Recent memory</p><h2 className="mt-1 text-[17px] font-extrabold tracking-[-.035em]">Latest decisions</h2></div><button onClick={() => setAnalysis(null)} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-primary hover:underline" data-testid="button-clear-result">Clear current result <RefreshCw size={13} /></button></div><div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left"><thead><tr className="border-b border-border text-[9px] uppercase tracking-[.14em] text-muted-foreground"><th className="pb-3 font-mono font-medium">Caller</th><th className="pb-3 font-mono font-medium">Risk</th><th className="pb-3 font-mono font-medium">Score</th><th className="pb-3 font-mono font-medium">Reviewed</th><th className="pb-3 font-mono font-medium">Next step</th></tr></thead><tbody>{dashboard.recentAnalyses.map(item => <tr key={item.id} className="border-b border-border/60 last:border-0"><td className="py-3 text-[12px] font-bold">{item.caller}</td><td className="py-3"><RiskBadge level={item.level} /></td><td className="py-3 font-mono text-[12px]">{item.score}</td><td className="py-3 text-[11px] text-muted-foreground">{item.time}</td><td className="py-3 text-[11px] font-semibold text-muted-foreground">{item.action}</td></tr>)}</tbody></table></div></section>}
+    <div className="mt-8 flex items-center gap-2 text-[10px] text-muted-foreground"><Flag size={13} className="text-accent-foreground" /> BhashaShield supports your judgment. It never asks for account access or stores your banking credentials.</div>
+  </div>;
+}
